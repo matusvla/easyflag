@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"reflect"
@@ -12,9 +11,14 @@ import (
 
 type flagBuilder struct {
 	flags     []flagData
-	values    []string
+	values    []value
 	mandatory map[string]interface{} // map[flag name]pointers to mandatory fields to be able to check if they have been filled after the initialization
 	extFns    []func() error
+}
+
+type value struct {
+	name   string
+	isBool bool
 }
 
 func newFlagBuilder() *flagBuilder {
@@ -26,14 +30,8 @@ func newFlagBuilder() *flagBuilder {
 func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 	cliV := reflect.ValueOf(cliParams)
 	cliT := reflect.TypeOf(cliParams)
-	if cliV.Kind() != reflect.Ptr {
-		return errors.New("got non-pointer type")
-	}
 	cliV = cliV.Elem()
 	cliT = cliT.Elem()
-	if cliV.Kind() != reflect.Struct {
-		return fmt.Errorf("got unexpected type kind %s (type %q), needs struct kind", cliV.Kind(), cliV.Type())
-	}
 
 	numFields := cliV.NumField()
 	for i := 0; i < numFields; i++ {
@@ -45,6 +43,10 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			if err = fb.setUpFlags(fld.Addr().Interface()); err != nil {
 				return err
 			}
+			continue
+		}
+
+		if flagMetadata == "" {
 			continue
 		}
 
@@ -150,45 +152,35 @@ func (fb *flagBuilder) attachFlags(fs *flag.FlagSet) {
 	}
 }
 
-func (fb *flagBuilder) parseFlags(args []string) (isHelpRequest bool, err error) {
+func (fb *flagBuilder) parseFlags(args []string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fb.attachFlags(fs)
-	m := make(map[string]bool)
-	for _, name := range fb.values {
-		hasValue := strings.HasSuffix(name, "=")
-		m["-"+strings.ReplaceAll(name, "=", "")] = hasValue
+
+	valueMap := make(map[string]bool)
+	for _, v := range fb.values {
+		valueMap[fmt.Sprintf("-%s", v.name)] = v.isBool
 	}
-	var filtered []string
 	for i := 0; i < len(args); i++ {
 		chunks := strings.Split(args[i], "=")
 		arg := strings.ReplaceAll(chunks[0], "--", "-")
-		hasValue, ex := m[arg]
+		hasValue, ex := valueMap[arg]
 		if !ex {
 			if arg == helpArg || arg == helpArgShort {
-				isHelpRequest = true
+				continue
 			} else {
-				return false, fmt.Errorf("unexpected cli parameter %q", arg)
+				return fmt.Errorf("unexpected cli argument %q", arg)
 			}
 		}
-		if !hasValue {
+		if !hasValue || len(chunks) > 1 {
 			// -v
-			filtered = append(filtered, arg)
 			continue
 		}
-		// has value, either using = or just by next token
-		if len(chunks) > 1 {
-			// --conf=someValue
-			filtered = append(filtered, args[i])
-			continue
-		}
-		// -c
 		if i+1 < len(args) {
-			// someValue
-			filtered = append(filtered, args[i:i+2]...)
 			i++
 		}
 	}
-	return isHelpRequest, fs.Parse(filtered)
+
+	return fs.Parse(args)
 }
 
 func (fb *flagBuilder) validate() error {
@@ -210,11 +202,20 @@ func (fb *flagBuilder) validate() error {
 
 }
 
+// runExtensionFunctions recursively runs all the relevant extension functions found during the flag collection process
+func (fb *flagBuilder) runExtensionFunctions() error {
+	for _, extFn := range fb.extFns {
+		if err := extFn(); err != nil {
+			return fmt.Errorf("extension running failed: %w", err)
+		}
+	}
+	return nil
+}
+
 type flagData interface{}
 
 type basicFlagData struct {
 	name      string
-	withValue bool
 	usage     string
 	mandatory bool
 }
@@ -226,10 +227,7 @@ type flagDataInstance[T any] struct {
 }
 
 func (fdi *basicFlagData) value() string {
-	if !fdi.withValue {
-		return fdi.name
-	}
-	return fdi.name + "="
+	return fdi.name
 }
 
 func parseFlagData[T any](fld reflect.Value, flagMetadata string, tParser func(string) (T, error)) (*flagDataInstance[T], error) {
@@ -266,14 +264,13 @@ func parseBasicFlagData(flagMetadata string) (flagData *basicFlagData, flagDefau
 	}
 	if len(fp) > 3 {
 		// here is space for extending the flag checking
-		if fp[3] == mandatoryValueIdent {
+		if fp[3] == mandatoryValue {
 			flagDefault = "" // if it is mandatory, we ignore default value
 			flagMandatory = true
 		}
 	}
 	return &basicFlagData{
-		name:      strings.TrimSuffix(flagName, "="),
-		withValue: strings.HasSuffix(flagName, "="),
+		name:      flagName,
 		usage:     flagUsage,
 		mandatory: flagMandatory,
 	}, flagDefault
@@ -281,7 +278,12 @@ func parseBasicFlagData(flagMetadata string) (flagData *basicFlagData, flagDefau
 
 // this currently cannot be a flagBuilder method due to the type parameters usage
 func addFlagData[T any](fb *flagBuilder, fd *flagDataInstance[T]) {
-	fb.values = append(fb.values, fd.value())
+	var a T
+	_, isBool := any(a).(bool) // only booleans do not have to have a value
+	fb.values = append(fb.values, value{
+		name:   fd.value(),
+		isBool: !isBool,
+	})
 	fb.flags = append(fb.flags, fd)
 	if fd.mandatory {
 		fb.mandatory[fd.name] = fd.addr
