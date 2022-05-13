@@ -217,24 +217,24 @@ func (fb *flagBuilder) runExtensionFunctions() error {
 
 type flagData interface{}
 
-type basicFlagData struct {
+type baseFlagData struct {
 	name      string
 	usage     string
 	mandatory bool
 }
 
 type flagDataInstance[T any] struct {
-	*basicFlagData
+	*baseFlagData
 	addr       *T
 	defaultVal T
 }
 
-func (fdi *basicFlagData) value() string {
+func (fdi *baseFlagData) value() string {
 	return fdi.name
 }
 
 func parseFlagData[T any](fld reflect.Value, flagMetadata string, tParser func(string) (T, error)) (*flagDataInstance[T], error) {
-	basicData, flagDefault := parseBasicFlagData(flagMetadata)
+	baseData, flagDefault := parseBaseFlagData(flagMetadata)
 	var defaultVal T
 	if flagDefault != "" {
 		var err error
@@ -245,14 +245,14 @@ func parseFlagData[T any](fld reflect.Value, flagMetadata string, tParser func(s
 	}
 	addr := fld.Addr().Interface().(*T)
 	f := &flagDataInstance[T]{
-		basicFlagData: basicData,
-		addr:          addr,
-		defaultVal:    defaultVal,
+		baseFlagData: baseData,
+		addr:         addr,
+		defaultVal:   defaultVal,
 	}
 	return f, nil
 }
 
-func parseBasicFlagData(flagMetadata string) (flagData *basicFlagData, flagDefault string) {
+func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, flagDefault string) {
 	fp := strings.Split(flagMetadata, "|")
 	flagName := strings.TrimSpace(fp[0])
 	var (
@@ -272,7 +272,7 @@ func parseBasicFlagData(flagMetadata string) (flagData *basicFlagData, flagDefau
 			flagMandatory = true
 		}
 	}
-	return &basicFlagData{
+	return &baseFlagData{
 		name:      flagName,
 		usage:     flagUsage,
 		mandatory: flagMandatory,
