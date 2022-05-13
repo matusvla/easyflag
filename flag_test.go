@@ -27,7 +27,7 @@ type Params struct {
 }
 
 func (p *Params) Extend() error {
-	p.ExtNumber = 9999999
+	p.ExtNumber = 9_999_999
 	return nil
 }
 
@@ -254,5 +254,6 @@ func BenchmarkOrdinaryFlags(b *testing.B) {
 		if err := fs.Parse([]string{"--str=asdf", "-str2", "fdsa", "-boo", "-num=15", "--num64", "16", "-unum=17", "-unum64=18", "-dur=5m"}); err != nil {
 			panic(err)
 		}
+		p.ExtNumber = 9_999_999
 	}
 }

@@ -156,13 +156,16 @@ func (fb *flagBuilder) parseFlags(args []string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fb.attachFlags(fs)
 
-	valueMap := make(map[string]bool)
+	valueMap := make(map[string]bool, len(fb.values))
 	for _, v := range fb.values {
 		valueMap[fmt.Sprintf("-%s", v.name)] = v.isBool
 	}
 	for i := 0; i < len(args); i++ {
 		chunks := strings.Split(args[i], "=")
-		arg := strings.ReplaceAll(chunks[0], "--", "-")
+		arg := chunks[0]
+		if len(arg) > 2 && arg[:2] == "--" {
+			arg = arg[1:]
+		}
 		hasValue, ex := valueMap[arg]
 		if !ex {
 			if arg == helpArg || arg == helpArgShort {
