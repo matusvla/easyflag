@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"reflect"
@@ -223,4 +224,35 @@ type FailingParams struct {
 
 func (np *FailingParams) Extend() error {
 	return failingParamsErr
+}
+
+func BenchmarkParseAndLoadFlags(b *testing.B) {
+	os.Args = []string{"executable_name", "--str=asdf", "-str2", "fdsa", "-boo", "-num=15", "--num64", "16", "-unum=17", "-unum64=18", "-dur=5m"}
+	for i := 0; i < b.N; i++ {
+		var p Params
+		err := ParseAndLoadFlags(&p)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkOrdinaryFlags(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		var p Params
+		fs := flag.NewFlagSet("", flag.PanicOnError)
+		fs.StringVar(&p.Str, "str", "", "Testing string")
+		fs.StringVar(&p.Str2, "str2", "Str2 default", "Testing string2")
+		fs.BoolVar(&p.Boo, "boo", true, "Testing boolean")
+		fs.IntVar(&p.Number, "num", 123, "Testing number")
+		fs.IntVar(&p.ExtNumber, "extnum", 0, "Extension testing number")
+		fs.Int64Var(&p.Number64, "num64", 1234, "Testing number")
+		fs.UintVar(&p.UNumber, "unum", 12345, "Testing number")
+		fs.Uint64Var(&p.UNumber64, "unum64", 123456, "Testing number")
+		fs.Float64Var(&p.Float64, "fnum64", 123.456, "Testing number")
+		fs.DurationVar(&p.Dur, "dur", 10*time.Minute, "Testing number")
+		if err := fs.Parse([]string{"--str=asdf", "-str2", "fdsa", "-boo", "-num=15", "--num64", "16", "-unum=17", "-unum64=18", "-dur=5m"}); err != nil {
+			panic(err)
+		}
+	}
 }
