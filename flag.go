@@ -33,7 +33,7 @@ Example of the input structure:
 		Number    int           `flag:"num|Testing number|123|"`
 		ExtNumber int           `flag:"extnum|Extension testing number|"`
 		Number64  int64         `flag:"num64|Testing number|1234|"`
-		UNumber   uint          `flag:"unum|Testing number|12345|required"`
+		UNumber   uint          `flag:"unum|Testing number||required"`
 		UNumber64 uint64        `flag:"unum64|Testing number|123456|"`
 		Float64   float64       `flag:"fnum64|Testing number|123.456|"`
 		Dur       time.Duration `flag:"dur|Testing number|10m|"`

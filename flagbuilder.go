@@ -117,7 +117,7 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			addFlagData(fb, fd)
 
 		default:
-			panic(fmt.Sprintf("unsupported flag type: %v", tpe))
+			return fmt.Errorf("unsupported flag type: %T", tpe)
 		}
 		if err != nil {
 			return err

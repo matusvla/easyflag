@@ -116,7 +116,7 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "fail - validation flags",
+			name:      "fail - missing a required flag",
 			cliParams: []string{"-str=asdf"},
 			arg:       &Params{},
 			want: want{
@@ -125,7 +125,16 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "success- nested params",
+			name:      "fail - missing multiple required flags",
+			cliParams: []string{},
+			arg:       &Params{},
+			want: want{
+				err:    errors.New("missing required flags \"str, unum\" or their values"),
+				params: &Params{},
+			},
+		},
+		{
+			name:      "success - nested params",
 			cliParams: []string{"-str=asdf", "-str2", "fdsa", "-boo", "-num=15", "-num64", "16", "-unum=17", "-unum64=18", "-dur=5m"},
 			arg:       &NestedParams{},
 			want: want{
@@ -147,7 +156,7 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "failure - params not a pointer",
+			name:      "fail - params not a pointer",
 			cliParams: []string{"-str=asdf", "-str2", "fdsa", "-boo", "-num=15", "-num64", "16", "-unum=17", "-unum64=18", "-dur=5m"},
 			arg:       Params{},
 			want: want{
@@ -158,7 +167,7 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "failure - nil params",
+			name:      "fail - nil params",
 			cliParams: []string{"-str=asdf", "-str2", "fdsa", "-boo", "-num=15", "-num64", "16", "-unum=17", "-unum64=18", "-dur=5m"},
 			arg:       nil,
 			want: want{
@@ -169,7 +178,7 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "failure - params pointer, but not a struct",
+			name:      "fail - params pointer, but not a struct",
 			cliParams: []string{"-str=asdf", "-str2", "fdsa", "-boo", "-num=15", "-num64", "16", "-unum=17", "-unum64=18", "-dur=5m"},
 			arg:       strPointer,
 			want: want{
@@ -180,12 +189,21 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "failure in extension",
+			name:      "fail in extension",
 			cliParams: []string{},
 			arg:       &FailingParams{},
 			want: want{
 				err:    fmt.Errorf("extension running failed: %w", failingParamsErr),
 				params: &FailingParams{},
+			},
+		},
+		{
+			name:      "fail - nil",
+			cliParams: nil,
+			arg:       nil,
+			want: want{
+				err:    &InvalidParamsError{Type: nil},
+				params: nil,
 			},
 		},
 	}
@@ -224,6 +242,41 @@ type FailingParams struct {
 
 func (np *FailingParams) Extend() error {
 	return failingParamsErr
+}
+
+func TestInvalidParamsError_Error(t *testing.T) {
+	tests := []struct {
+		name    string
+		fldType reflect.Type
+		want    string
+	}{
+		{
+			name:    "non-pointer",
+			fldType: reflect.TypeOf(5),
+			want:    "flags parse: got non-pointer int",
+		},
+		{
+			name: "not structure",
+			fldType: reflect.TypeOf(func() *int {
+				a := 5
+				return &a
+			}()),
+			want: "flags parse: got *int",
+		},
+		{
+			name:    "nil",
+			fldType: nil,
+			want:    "flags parse: got <nil>",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &InvalidParamsError{
+				Type: tt.fldType,
+			}
+			assert.Equalf(t, tt.want, e.Error(), "Error()")
+		})
+	}
 }
 
 func BenchmarkParseAndLoadFlags(b *testing.B) {
