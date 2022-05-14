@@ -13,13 +13,13 @@ import (
 )
 
 type Params struct {
-	Str           string        `flag:"str|Testing string||mandatory"`
+	Str           string        `flag:"str|Testing string||required"`
 	Str2          string        `flag:"str2|Testing string2|Str2 default|"`
 	Boo           bool          `flag:"boo|Testing boolean|true|"`
 	Number        int           `flag:"num|Testing number|123|"`
 	ExtNumber     int           `flag:"extnum|Extension testing number|"`
 	Number64      int64         `flag:"num64|Testing number|1234|"`
-	UNumber       uint          `flag:"unum|Testing number|12345|mandatory"`
+	UNumber       uint          `flag:"unum|Testing number|12345|required"`
 	UNumber64     uint64        `flag:"unum64|Testing number|123456|"`
 	Float64       float64       `flag:"fnum64|Testing number|123.456|"`
 	Dur           time.Duration `flag:"dur|Testing number|10m|"`
@@ -65,14 +65,14 @@ func TestParseFlags(t *testing.T) {
 			name:      "success substructure",
 			cliParams: []string{"-str=asdf", "-str2", "fdsa"},
 			arg: &struct {
-				Str       string `flag:"str|Testing string||mandatory"`
+				Str       string `flag:"str|Testing string||required"`
 				Substruct struct {
 					Str2 string `flag:"str2|Testing string2|Str2 default|"`
 				}
 			}{},
 			want: want{
 				params: &struct {
-					Str       string `flag:"str|Testing string||mandatory"`
+					Str       string `flag:"str|Testing string||required"`
 					Substruct struct {
 						Str2 string `flag:"str2|Testing string2|Str2 default|"`
 					}
@@ -120,7 +120,7 @@ func TestParseFlags(t *testing.T) {
 			cliParams: []string{"-str=asdf"},
 			arg:       &Params{},
 			want: want{
-				err:    errors.New("missing mandatory flag \"unum\" or its value"),
+				err:    errors.New("missing required flag \"unum\" or its value"),
 				params: &Params{},
 			},
 		},

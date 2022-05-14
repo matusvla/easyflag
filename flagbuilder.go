@@ -10,10 +10,10 @@ import (
 )
 
 type flagBuilder struct {
-	flags     []flagData
-	values    []value
-	mandatory map[string]interface{} // map[flag name]pointers to mandatory fields to be able to check if they have been filled after the initialization
-	extFns    []func() error
+	flags    []flagData
+	values   []value
+	required map[string]interface{} // map[flag name]pointers to the required fields to be able to check if they have been filled after the initialization
+	extFns   []func() error
 }
 
 type value struct {
@@ -23,7 +23,7 @@ type value struct {
 
 func newFlagBuilder() *flagBuilder {
 	return &flagBuilder{
-		mandatory: make(map[string]interface{}),
+		required: make(map[string]interface{}),
 	}
 }
 
@@ -188,19 +188,19 @@ func (fb *flagBuilder) parseFlags(args []string) error {
 
 func (fb *flagBuilder) validate() error {
 	var missing []string
-	for mandatoryKey, mandatoryValue := range fb.mandatory {
-		fld := reflect.ValueOf(mandatoryValue).Elem()
+	for key, val := range fb.required {
+		fld := reflect.ValueOf(val).Elem()
 		if fld.IsZero() {
-			missing = append(missing, mandatoryKey)
+			missing = append(missing, key)
 		}
 	}
 	switch len(missing) {
 	case 0:
 		return nil
 	case 1:
-		return fmt.Errorf("missing mandatory flag %q or its value", strings.Join(missing, ", "))
+		return fmt.Errorf("missing required flag %q or its value", strings.Join(missing, ", "))
 	default:
-		return fmt.Errorf("missing mandatory flags %q or their values", strings.Join(missing, ", "))
+		return fmt.Errorf("missing required flags %q or their values", strings.Join(missing, ", "))
 	}
 
 }
@@ -218,9 +218,9 @@ func (fb *flagBuilder) runExtensionFunctions() error {
 type flagData interface{}
 
 type baseFlagData struct {
-	name      string
-	usage     string
-	mandatory bool
+	name       string
+	usage      string
+	isRequired bool
 }
 
 type flagDataInstance[T any] struct {
@@ -252,31 +252,31 @@ func parseFlagData[T any](fld reflect.Value, flagMetadata string, tParser func(s
 	return f, nil
 }
 
-func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, flagDefault string) {
-	fp := strings.Split(flagMetadata, "|")
-	flagName := strings.TrimSpace(fp[0])
+func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, defaultVal string) {
+	metadataParts := strings.Split(flagMetadata, "|")
+	name := strings.TrimSpace(metadataParts[0])
 	var (
-		flagUsage     string
-		flagMandatory bool
+		usage      string
+		isRequired bool
 	)
-	if len(fp) > 1 {
-		flagUsage = strings.TrimSpace(fp[1])
+	if len(metadataParts) > 1 {
+		usage = strings.TrimSpace(metadataParts[1])
 	}
-	if len(fp) > 2 {
-		flagDefault = strings.TrimSpace(fp[2])
+	if len(metadataParts) > 2 {
+		defaultVal = strings.TrimSpace(metadataParts[2])
 	}
-	if len(fp) > 3 {
+	if len(metadataParts) > 3 {
 		// here is space for extending the flag checking
-		if fp[3] == mandatoryValue {
-			flagDefault = "" // if it is mandatory, we ignore default value
-			flagMandatory = true
+		if metadataParts[3] == requiredValue {
+			defaultVal = "" // if it is required, we ignore default value
+			isRequired = true
 		}
 	}
 	return &baseFlagData{
-		name:      flagName,
-		usage:     flagUsage,
-		mandatory: flagMandatory,
-	}, flagDefault
+		name:       name,
+		usage:      usage,
+		isRequired: isRequired,
+	}, defaultVal
 }
 
 // this currently cannot be a flagBuilder method due to the type parameters usage
@@ -288,7 +288,7 @@ func addFlagData[T any](fb *flagBuilder, fd *flagDataInstance[T]) {
 		isBool: !isBool,
 	})
 	fb.flags = append(fb.flags, fd)
-	if fd.mandatory {
-		fb.mandatory[fd.name] = fd.addr
+	if fd.isRequired {
+		fb.required[fd.name] = fd.addr
 	}
 }
