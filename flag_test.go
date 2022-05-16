@@ -1,4 +1,4 @@
-package cli
+package easyflag
 
 import (
 	"errors"
@@ -17,7 +17,7 @@ type Params struct {
 	Str2          string        `flag:"str2|Testing string2|Str2 default|"`
 	Boo           bool          `flag:"boo|Testing boolean|true|"`
 	Number        int           `flag:"num|Testing number|123|"`
-	ExtNumber     int           `flag:"extnum|Extension testing number|"`
+	ExtNumber     int           `flag:"extnum|Extender testing number|"`
 	Number64      int64         `flag:"num64|Testing number|1234|"`
 	UNumber       uint          `flag:"unum|Testing number|12345|required"`
 	UNumber64     uint64        `flag:"unum64|Testing number|123456|"`
@@ -87,6 +87,29 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
+			name:      "success - fields without flags",
+			cliParams: []string{"-str=asdf"},
+			arg: &struct {
+				Str          string `flag:"str|Testing string||required"`
+				AnotherField struct {
+					SubstrStr string
+				}
+			}{},
+			want: want{
+				params: &struct {
+					Str          string `flag:"str|Testing string||required"`
+					AnotherField struct {
+						SubstrStr string
+					}
+				}{
+					Str: "asdf",
+					AnotherField: struct {
+						SubstrStr string
+					}{},
+				},
+			},
+		},
+		{
 			name:      "success boolean in allowed forms",
 			cliParams: []string{"-boo", "-boo2=true", "-boo3=false"},
 			arg: &struct {
@@ -108,10 +131,10 @@ func TestParseFlags(t *testing.T) {
 		},
 		{
 			name:      "fail - invalid flags",
-			cliParams: []string{"-str=asdf", "-str2", "fdsa", "-unum=10", "random", "stuff"},
+			cliParams: []string{"-str=asdf", "-str2", "fdsa", "-unum=10", "-random", "stuff"},
 			arg:       &Params{},
 			want: want{
-				err:    errors.New("unexpected cli argument \"random\""),
+				err:    errors.New("flag provided but not defined: -random"),
 				params: &Params{},
 			},
 		},
@@ -125,12 +148,29 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
-			name:      "fail - missing multiple required flags",
-			cliParams: []string{},
-			arg:       &Params{},
+			name:      "fail - trying to overwrite the short help flag",
+			cliParams: []string{""},
+			arg: &struct {
+				Boo bool `flag:"h"`
+			}{},
 			want: want{
-				err:    errors.New("missing required flags \"str, unum\" or their values"),
-				params: &Params{},
+				params: &struct {
+					Boo bool `flag:"h"`
+				}{},
+				err: errors.New("overwriting of the reserved flag -h not allowed"),
+			},
+		},
+		{
+			name:      "fail - trying to overwrite the long help flag",
+			cliParams: []string{""},
+			arg: &struct {
+				Boo bool `flag:"help"`
+			}{},
+			want: want{
+				params: &struct {
+					Boo bool `flag:"help"`
+				}{},
+				err: errors.New("overwriting of the reserved flag -help not allowed"),
 			},
 		},
 		{
@@ -298,7 +338,7 @@ func BenchmarkOrdinaryFlags(b *testing.B) {
 		fs.StringVar(&p.Str2, "str2", "Str2 default", "Testing string2")
 		fs.BoolVar(&p.Boo, "boo", true, "Testing boolean")
 		fs.IntVar(&p.Number, "num", 123, "Testing number")
-		fs.IntVar(&p.ExtNumber, "extnum", 0, "Extension testing number")
+		fs.IntVar(&p.ExtNumber, "extnum", 0, "Extender testing number")
 		fs.Int64Var(&p.Number64, "num64", 1234, "Testing number")
 		fs.UintVar(&p.UNumber, "unum", 12345, "Testing number")
 		fs.Uint64Var(&p.UNumber64, "unum64", 123456, "Testing number")

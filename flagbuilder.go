@@ -1,4 +1,4 @@
-package cli
+package easyflag
 
 import (
 	"flag"
@@ -11,14 +11,8 @@ import (
 
 type flagBuilder struct {
 	flags    []flagData
-	values   []value
 	required map[string]interface{} // map[flag name]pointers to the required fields to be able to check if they have been filled after the initialization
 	extFns   []func() error
-}
-
-type value struct {
-	name   string
-	isBool bool
 }
 
 func newFlagBuilder() *flagBuilder {
@@ -155,34 +149,6 @@ func (fb *flagBuilder) attachFlags(fs *flag.FlagSet) {
 func (fb *flagBuilder) parseFlags(args []string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fb.attachFlags(fs)
-
-	valueMap := make(map[string]bool, len(fb.values))
-	for _, v := range fb.values {
-		valueMap[fmt.Sprintf("-%s", v.name)] = v.isBool
-	}
-	for i := 0; i < len(args); i++ {
-		chunks := strings.Split(args[i], "=")
-		arg := chunks[0]
-		if len(arg) > 2 && arg[:2] == "--" {
-			arg = arg[1:]
-		}
-		hasValue, ex := valueMap[arg]
-		if !ex {
-			if arg == helpArg || arg == helpArgShort {
-				continue
-			} else {
-				return fmt.Errorf("unexpected cli argument %q", arg)
-			}
-		}
-		if !hasValue || len(chunks) > 1 {
-			// -v
-			continue
-		}
-		if i+1 < len(args) {
-			i++
-		}
-	}
-
 	return fs.Parse(args)
 }
 
@@ -243,6 +209,9 @@ func parseFlagData[T any](fld reflect.Value, flagMetadata string, tParser func(s
 			return nil, err
 		}
 	}
+	if n := fmt.Sprintf("-%s", baseData.name); n == helpArg || n == helpArgShort {
+		return nil, fmt.Errorf("overwriting of the reserved flag %s not allowed", n)
+	}
 	addr := fld.Addr().Interface().(*T)
 	f := &flagDataInstance[T]{
 		baseFlagData: baseData,
@@ -281,12 +250,6 @@ func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, defaultVal 
 
 // this currently cannot be a flagBuilder method due to the type parameters usage
 func addFlagData[T any](fb *flagBuilder, fd *flagDataInstance[T]) {
-	var a T
-	_, isBool := any(a).(bool) // only booleans do not have to have a value
-	fb.values = append(fb.values, value{
-		name:   fd.value(),
-		isBool: !isBool,
-	})
 	fb.flags = append(fb.flags, fd)
 	if fd.isRequired {
 		fb.required[fd.name] = fd.addr
