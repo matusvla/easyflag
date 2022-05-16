@@ -49,8 +49,7 @@ func ParseAndLoadFlags(params interface{}) (retErr error) {
 	}
 
 	passedArgs := os.Args[1:] // first argument is a command name - we skip it
-	err := fb.parseFlags(passedArgs)
-	if err != nil {
+	if err := fb.parseFlags(passedArgs); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)
 		}

@@ -157,7 +157,7 @@ func TestParseFlags(t *testing.T) {
 				params: &struct {
 					Boo bool `flag:"h"`
 				}{},
-				err: errors.New("overwriting of the reserved flag -h not allowed"),
+				err: errors.New("reserved flag -h overwriting not allowed"),
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func TestParseFlags(t *testing.T) {
 				params: &struct {
 					Boo bool `flag:"help"`
 				}{},
-				err: errors.New("overwriting of the reserved flag -help not allowed"),
+				err: errors.New("reserved flag -help overwriting not allowed"),
 			},
 		},
 		{

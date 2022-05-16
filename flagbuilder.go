@@ -22,102 +22,62 @@ func newFlagBuilder() *flagBuilder {
 	}
 }
 
-func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
-	cliV := reflect.ValueOf(cliParams)
-	cliT := reflect.TypeOf(cliParams)
-	cliV = cliV.Elem()
-	cliT = cliT.Elem()
+func (fb *flagBuilder) setUpFlags(params interface{}) error {
+	cliV := reflect.ValueOf(params).Elem()
+	cliT := reflect.TypeOf(params).Elem()
 
-	numFields := cliV.NumField()
-	for i := 0; i < numFields; i++ {
+	for i := 0; i < cliV.NumField(); i++ {
 		fld := cliV.Field(i)
 		fldT := cliT.Field(i)
-		flagMetadata := fldT.Tag.Get("flag")
+		flagMetadataStr := fldT.Tag.Get("flag")
 
+		// recursion for the underlying structures
 		if fld.Kind() == reflect.Struct {
-			if err = fb.setUpFlags(fld.Addr().Interface()); err != nil {
+			if err := fb.setUpFlags(fld.Addr().Interface()); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if flagMetadata == "" {
+		// skipping the fields without the `flag` field tag
+		if flagMetadataStr == "" {
 			continue
 		}
 
+		var err error
 		switch tpe := fld.Interface().(type) {
 		case string:
-			fd, err := parseFlagData(fld, flagMetadata, func(s string) (string, error) { return s, nil })
-			if err != nil {
-				return err
-			}
-			fb.flagSet.StringVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, func(s string) (string, error) { return s, nil }, fb.flagSet.StringVar)
 
 		case bool:
-			fd, err := parseFlagData(fld, flagMetadata, strconv.ParseBool)
-			if err != nil {
-				return err
-			}
-			fb.flagSet.BoolVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, strconv.ParseBool, fb.flagSet.BoolVar)
 
 		case int:
-			fd, err := parseFlagData(fld, flagMetadata, strconv.Atoi)
-			if err != nil {
-				return err
-			}
-			fb.flagSet.IntVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, strconv.Atoi, fb.flagSet.IntVar)
 
 		case int64:
-			fd, err := parseFlagData(fld, flagMetadata, func(s string) (int64, error) {
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, func(s string) (int64, error) {
 				return strconv.ParseInt(s, 10, 64)
-			})
-			if err != nil {
-				return err
-			}
-			fb.flagSet.Int64Var(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			}, fb.flagSet.Int64Var)
 
 		case uint:
-			fd, err := parseFlagData(fld, flagMetadata, func(s string) (uint, error) {
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, func(s string) (uint, error) {
 				result, err := strconv.ParseUint(s, 10, 32)
 				return uint(result), err
-			})
-			if err != nil {
-				return err
-			}
-			fb.flagSet.UintVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			}, fb.flagSet.UintVar)
 
 		case uint64:
-			fd, err := parseFlagData(fld, flagMetadata, func(s string) (uint64, error) {
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, func(s string) (uint64, error) {
 				return strconv.ParseUint(s, 10, 64)
-			})
-			if err != nil {
-				return err
-			}
-			fb.flagSet.Uint64Var(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			}, fb.flagSet.Uint64Var)
 
 		case float64:
-			fd, err := parseFlagData(fld, flagMetadata, func(s string) (float64, error) {
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, func(s string) (float64, error) {
 				return strconv.ParseFloat(s, 64)
-			})
-			if err != nil {
-				return err
-			}
-			fb.flagSet.Float64Var(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			}, fb.flagSet.Float64Var)
 
 		case time.Duration:
-			fd, err := parseFlagData(fld, flagMetadata, time.ParseDuration)
-			if err != nil {
-				return err
-			}
-			fb.flagSet.DurationVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
-			addRequired(fb, fd)
+			err = parseAndAttachFlagData(fb, fld, flagMetadataStr, time.ParseDuration, fb.flagSet.DurationVar)
 
 		default:
 			return fmt.Errorf("unsupported flag type: %T", tpe)
@@ -126,7 +86,7 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			return err
 		}
 	}
-	if e, ok := cliParams.(Extender); ok {
+	if e, ok := params.(Extender); ok {
 		fb.extFns = append(fb.extFns, e.Extend)
 	}
 	return nil
@@ -152,7 +112,6 @@ func (fb *flagBuilder) validate() error {
 	default:
 		return fmt.Errorf("missing required flags %q or their values", strings.Join(missing, ", "))
 	}
-
 }
 
 // runExtensionFunctions recursively runs all the relevant extension functions found during the flag collection process
@@ -165,50 +124,47 @@ func (fb *flagBuilder) runExtensionFunctions() error {
 	return nil
 }
 
-type baseFlagData struct {
+func parseAndAttachFlagData[T any](
+	fb *flagBuilder,
+	fld reflect.Value,
+	flagMetadata string,
+	parseFn func(string) (T, error),
+	attachFn func(p *T, name string, value T, usage string),
+) error {
+	fm := parseFlagMetadata(flagMetadata)
+	var defaultVal T
+	if fm.defaultVal != "" {
+		var err error
+		defaultVal, err = parseFn(fm.defaultVal)
+		if err != nil {
+			return err
+		}
+	}
+	if n := fmt.Sprintf("-%s", fm.name); n == helpArg || n == helpArgShort {
+		return fmt.Errorf("reserved flag %s overwriting not allowed", n)
+	}
+	addr := fld.Addr().Interface().(*T)
+
+	attachFn(addr, fm.name, defaultVal, fm.usage)
+	if fm.isRequired {
+		fb.required[fm.name] = addr
+	}
+	return nil
+}
+
+type flagMetadata struct {
 	name       string
 	usage      string
+	defaultVal string
 	isRequired bool
 }
 
-type flagDataInstance[T any] struct {
-	*baseFlagData
-	addr       *T
-	defaultVal T
-}
-
-func (fdi *baseFlagData) value() string {
-	return fdi.name
-}
-
-func parseFlagData[T any](fld reflect.Value, flagMetadata string, tParser func(string) (T, error)) (*flagDataInstance[T], error) {
-	baseData, flagDefault := parseBaseFlagData(flagMetadata)
-	var defaultVal T
-	if flagDefault != "" {
-		var err error
-		defaultVal, err = tParser(flagDefault)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if n := fmt.Sprintf("-%s", baseData.name); n == helpArg || n == helpArgShort {
-		return nil, fmt.Errorf("overwriting of the reserved flag %s not allowed", n)
-	}
-	addr := fld.Addr().Interface().(*T)
-	f := &flagDataInstance[T]{
-		baseFlagData: baseData,
-		addr:         addr,
-		defaultVal:   defaultVal,
-	}
-	return f, nil
-}
-
-func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, defaultVal string) {
-	metadataParts := strings.Split(flagMetadata, "|")
+func parseFlagMetadata(flagMetadataStr string) flagMetadata {
+	metadataParts := strings.Split(flagMetadataStr, "|")
 	name := strings.TrimSpace(metadataParts[0])
 	var (
-		usage      string
-		isRequired bool
+		usage, defaultVal string
+		isRequired        bool
 	)
 	if len(metadataParts) > 1 {
 		usage = strings.TrimSpace(metadataParts[1])
@@ -223,16 +179,5 @@ func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, defaultVal 
 			isRequired = true
 		}
 	}
-	return &baseFlagData{
-		name:       name,
-		usage:      usage,
-		isRequired: isRequired,
-	}, defaultVal
-}
-
-// this currently cannot be a flagBuilder method due to the type parameters usage
-func addRequired[T any](fb *flagBuilder, fd *flagDataInstance[T]) {
-	if fd.isRequired {
-		fb.required[fd.name] = fd.addr
-	}
+	return flagMetadata{name, usage, defaultVal, isRequired}
 }
