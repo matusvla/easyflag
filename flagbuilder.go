@@ -10,7 +10,7 @@ import (
 )
 
 type flagBuilder struct {
-	flags    []flagData
+	flagSet  *flag.FlagSet
 	required map[string]interface{} // map[flag name]pointers to the required fields to be able to check if they have been filled after the initialization
 	extFns   []func() error
 }
@@ -18,6 +18,7 @@ type flagBuilder struct {
 func newFlagBuilder() *flagBuilder {
 	return &flagBuilder{
 		required: make(map[string]interface{}),
+		flagSet:  flag.NewFlagSet("", flag.ContinueOnError),
 	}
 }
 
@@ -50,21 +51,24 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.StringVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case bool:
 			fd, err := parseFlagData(fld, flagMetadata, strconv.ParseBool)
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.BoolVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case int:
 			fd, err := parseFlagData(fld, flagMetadata, strconv.Atoi)
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.IntVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case int64:
 			fd, err := parseFlagData(fld, flagMetadata, func(s string) (int64, error) {
@@ -73,7 +77,8 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.Int64Var(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case uint:
 			fd, err := parseFlagData(fld, flagMetadata, func(s string) (uint, error) {
@@ -83,7 +88,8 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.UintVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case uint64:
 			fd, err := parseFlagData(fld, flagMetadata, func(s string) (uint64, error) {
@@ -92,7 +98,8 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.Uint64Var(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case float64:
 			fd, err := parseFlagData(fld, flagMetadata, func(s string) (float64, error) {
@@ -101,14 +108,16 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.Float64Var(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		case time.Duration:
 			fd, err := parseFlagData(fld, flagMetadata, time.ParseDuration)
 			if err != nil {
 				return err
 			}
-			addFlagData(fb, fd)
+			fb.flagSet.DurationVar(fd.addr, fd.name, fd.defaultVal, fd.usage)
+			addRequired(fb, fd)
 
 		default:
 			return fmt.Errorf("unsupported flag type: %T", tpe)
@@ -123,33 +132,8 @@ func (fb *flagBuilder) setUpFlags(cliParams interface{}) (err error) {
 	return nil
 }
 
-func (fb *flagBuilder) attachFlags(fs *flag.FlagSet) {
-	for _, flg := range fb.flags {
-		switch f := flg.(type) {
-		case *flagDataInstance[string]:
-			fs.StringVar(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[bool]:
-			fs.BoolVar(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[int]:
-			fs.IntVar(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[int64]:
-			fs.Int64Var(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[uint]:
-			fs.UintVar(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[uint64]:
-			fs.Uint64Var(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[float64]:
-			fs.Float64Var(f.addr, f.name, f.defaultVal, f.usage)
-		case *flagDataInstance[time.Duration]:
-			fs.DurationVar(f.addr, f.name, f.defaultVal, f.usage)
-		}
-	}
-}
-
 func (fb *flagBuilder) parseFlags(args []string) error {
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	fb.attachFlags(fs)
-	return fs.Parse(args)
+	return fb.flagSet.Parse(args)
 }
 
 func (fb *flagBuilder) validate() error {
@@ -180,8 +164,6 @@ func (fb *flagBuilder) runExtensionFunctions() error {
 	}
 	return nil
 }
-
-type flagData interface{}
 
 type baseFlagData struct {
 	name       string
@@ -249,8 +231,7 @@ func parseBaseFlagData(flagMetadata string) (flagData *baseFlagData, defaultVal 
 }
 
 // this currently cannot be a flagBuilder method due to the type parameters usage
-func addFlagData[T any](fb *flagBuilder, fd *flagDataInstance[T]) {
-	fb.flags = append(fb.flags, fd)
+func addRequired[T any](fb *flagBuilder, fd *flagDataInstance[T]) {
 	if fd.isRequired {
 		fb.required[fd.name] = fd.addr
 	}
