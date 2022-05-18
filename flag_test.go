@@ -252,7 +252,7 @@ func TestParseFlags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Args = []string{"executable_name"}
 			os.Args = append(os.Args, tt.cliParams...)
-			err := ParseAndLoadFlags(tt.arg)
+			err := ParseAndLoad(tt.arg)
 			assert.Equal(t, tt.want.err, err)
 			assert.Equal(t, tt.want.params, tt.arg)
 		})
@@ -323,7 +323,7 @@ func BenchmarkParseAndLoadFlags(b *testing.B) {
 	os.Args = []string{"executable_name", "--str=asdf", "-str2", "fdsa", "-boo", "-num=15", "--num64", "16", "-unum=17", "-unum64=18", "-dur=5m"}
 	for i := 0; i < b.N; i++ {
 		var p Params
-		err := ParseAndLoadFlags(&p)
+		err := ParseAndLoad(&p)
 		if err != nil {
 			panic(err)
 		}

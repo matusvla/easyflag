@@ -15,22 +15,21 @@ const (
 	requiredValue = "required"
 )
 
-// Extender is an interface that can be implemented by the type passed to the ParseAndLoadFlags function.
-// It can be used for the additional validation or modification of the CLI parameters
+// Extender is an interface that can be implemented by the type passed to the ParseAndLoad function.
+// It can be used for additional validation or modification of the CLI arguments
 type Extender interface {
 	Extend() error
 }
 
 /*
-ParseAndLoadFlags takes a pointer to a structure and fills it from the CLI flags according to the `flag` meta tags
-defined on the level of structure's fields.
+ParseAndLoad takes a pointer to a structure and fills it from the user defined CLI flags according to the `flag` fields metadata.
 
-If the Params type or any of its fields implements the Extender interface then its Extend method will be called at the end of the setup.
+If the params type or any of its fields implements the Extender interface then its Extend method will be called at the end of the setup.
 This can be used for the validation or modification of the field values.
 
-In case of an error during the flag parsing, the passed structure is set to its zero value and the error is returned
+In case of an error during the flag parsing, the passed structure is set to its zero value and the error is returned.
 */
-func ParseAndLoadFlags(params interface{}) (retErr error) {
+func ParseAndLoad(params interface{}) (retErr error) {
 	rv := reflect.ValueOf(params)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() || rv.Elem().Kind() != reflect.Struct {
 		return &InvalidParamsError{reflect.TypeOf(params)}
@@ -63,11 +62,12 @@ func ParseAndLoadFlags(params interface{}) (retErr error) {
 	return fb.validate()
 }
 
-// InvalidParamsError is an error returned in case that the provided CLI Params is not a pointer to a structure.
+// InvalidParamsError is an error returned in case that the `params` argument passed to the ParseAndLoad function is not a pointer to a structure.
 type InvalidParamsError struct {
 	Type reflect.Type
 }
 
+// Error prints the description of the InvalidParamsError.
 func (e *InvalidParamsError) Error() string {
 	const outputFmt = "flags parse: got %s"
 	if e.Type == nil {
