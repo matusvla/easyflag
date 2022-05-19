@@ -58,6 +58,6 @@ This corresponds to the behavior of the native go flag package.
 - For any field type other than boolean both forms -str val and str=val are allowed.
 
 - There are two reserved flags -h and -help. If a user provides one of these, only the information about
-the available flags is printed ant the program exits.
+the available flags is printed and the program exits.
 */
 package easyflag
