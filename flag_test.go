@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"testing"
@@ -348,5 +349,39 @@ func BenchmarkOrdinaryFlags(b *testing.B) {
 			panic(err)
 		}
 		p.ExtNumber = 9_999_999
+	}
+}
+
+// Example_basic demonstrates the basic usage of the package.
+func Example_basic() {
+	var p struct {
+		InputPath string `flag:"in|Path to the input file||required"`
+		OutputLen int64  `flag:"n|Maximum number of characters to read (-1 for all)|-1"`
+	}
+
+	if err := ParseAndLoad(&p); err != nil {
+		log.Fatalf("error while parsing the cli parameters: %s", err.Error())
+	}
+}
+
+// Example_basic demonstrates the usage of nested structures.
+func Example_nested() {
+	type userAuth struct {
+		Username string `flag:"user|Username||required"`
+		Password string `flag:"pass|Passsword"`
+	}
+
+	type serverInfo struct {
+		Host string `flag:"a|Server host address|127.0.0.1"`
+		Port int    `flag:"p|Server port|80"`
+	}
+
+	var p struct {
+		UserAuth   userAuth
+		ServerInfo serverInfo
+	}
+
+	if err := ParseAndLoad(&p); err != nil {
+		log.Fatalf("error while parsing the cli parameters: %s", err.Error())
 	}
 }

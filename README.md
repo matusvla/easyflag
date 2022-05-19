@@ -1,4 +1,4 @@
-# Easy flag
+# Easyflag package
 
 The **easyflag** package simplifies working with the native go [flag](https://pkg.go.dev/flag) package by simplifying
 the flag definition and parsing process. The flags are defined as structure field tags:
@@ -88,12 +88,12 @@ func (p *params) Extend() error {
 ## Usage notes
 
 - The package does not distinguish between the flag form with one and two leading hyphens (e.g. `-help` and `--help` are
-  both valid, and they mean the same)
+  both valid, and they mean the same).
 
 - The allowed form of a boolean flag is either `-boo` without any value or `-boo=true` for an explicit value setup. This
   corresponds to the behavior of the native go [flag](https://pkg.go.dev/flag) package.
 
-- For any field type other than boolean both forms `-str val` and `str=val` are allowed
+- For any field type other than boolean both forms `-str val` and `str=val` are allowed.
 
 - There are two reserved flags `-h` and `-help`. If a user provides one of these, only the information about
   the available flags is printed ant the program exits.

@@ -22,7 +22,7 @@ type Extender interface {
 }
 
 /*
-ParseAndLoad takes a pointer to a structure and fills it from the user defined CLI flags according to the `flag` fields metadata.
+ParseAndLoad takes a pointer to a structure and fills it from the user defined CLI flags according to the flag metadata defined as structure field tags.
 
 If the params type or any of its fields implements the Extender interface then its Extend method will be called at the end of the setup.
 This can be used for the validation or modification of the field values.
@@ -62,7 +62,7 @@ func ParseAndLoad(params interface{}) (retErr error) {
 	return fb.validate()
 }
 
-// InvalidParamsError is an error returned in case that the `params` argument passed to the ParseAndLoad function is not a pointer to a structure.
+// InvalidParamsError is an error returned in case that the params argument passed to the ParseAndLoad function is not a pointer to a structure.
 type InvalidParamsError struct {
 	Type reflect.Type
 }
