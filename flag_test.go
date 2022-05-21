@@ -247,6 +247,19 @@ func TestParseFlags(t *testing.T) {
 				params: nil,
 			},
 		},
+		{
+			name:      "fail - fourth segment invalid",
+			cliParams: []string{""},
+			arg: &struct {
+				Boo bool `flag:"str|Testing string||whatever"`
+			}{},
+			want: want{
+				params: &struct {
+					Boo bool `flag:"str|Testing string||whatever"`
+				}{},
+				err: errors.New("unsupported value \"whatever\" in the fourth metadata part"),
+			},
+		},
 	}
 
 	for _, tt := range tests {

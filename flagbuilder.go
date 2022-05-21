@@ -131,7 +131,10 @@ func parseAndAttachFlagData[T any](
 	parseFn func(string) (T, error),
 	attachFn func(p *T, name string, value T, usage string),
 ) error {
-	fm := parseFlagMetadata(flagMetadata)
+	fm, err := parseFlagMetadata(flagMetadata)
+	if err != nil {
+		return err
+	}
 	var defaultVal T
 	if fm.defaultVal != "" {
 		var err error
@@ -159,7 +162,7 @@ type flagMetadata struct {
 	isRequired bool
 }
 
-func parseFlagMetadata(flagMetadataStr string) flagMetadata {
+func parseFlagMetadata(flagMetadataStr string) (flagMetadata, error) {
 	metadataParts := strings.Split(flagMetadataStr, "|")
 	name := strings.TrimSpace(metadataParts[0])
 	var (
@@ -173,11 +176,14 @@ func parseFlagMetadata(flagMetadataStr string) flagMetadata {
 		defaultVal = strings.TrimSpace(metadataParts[2])
 	}
 	if len(metadataParts) > 3 {
-		// here is space for extending the flag checking
-		if metadataParts[3] == requiredValue {
+		switch val := metadataParts[3]; val {
+		case requiredValue:
 			defaultVal = "" // if it is required, we ignore default value
 			isRequired = true
+		case "":
+		default:
+			return flagMetadata{}, fmt.Errorf("unsupported value %q in the fourth metadata part", val)
 		}
 	}
-	return flagMetadata{name, usage, defaultVal, isRequired}
+	return flagMetadata{name, usage, defaultVal, isRequired}, nil
 }
